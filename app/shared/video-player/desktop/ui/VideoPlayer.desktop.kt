@@ -4,8 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -38,7 +38,6 @@ import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
 import uk.co.caprica.vlcj.player.component.CallbackMediaPlayerComponent
 import uk.co.caprica.vlcj.player.embedded.EmbeddedMediaPlayer
-import java.util.Locale
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration.Companion.seconds
 
@@ -65,63 +64,10 @@ class VlcjVideoPlayerState(parentCoroutineContext: CoroutineContext) : PlayerSta
         CallbackMediaPlayerComponent() // init libraries
     }
 
-    val component = run {
-        object : ComposeMediaPlayerComponent("-v") { //"-vv", "--avcodec-hw", "none"
-//            override fun mouseClicked(e: MouseEvent?) {
-//                super.mouseClicked(e)
-//                parent.dispatchEvent(e)
-//            }
-        }
-    }
-    var bitmap: ImageBitmap by component::composeImage
-    val mediaPlayerFactory = MediaPlayerFactory(
-        "--video-title=vlcj video output",
-        "--no-snapshot-preview",
-        "--intf=dummy",
-        "-v"
-    )
-    val player: EmbeddedMediaPlayer = component.mediaPlayer()
-//        mediaPlayerFactory.mediaPlayers().newEmbeddedMediaPlayer()
-
-//    val surface = SkiaVideoSurface(
-//        renderCallback = {
-//            bitmap = it
-//        },
-//        videoSurfaceAdapter = null
-//    ).apply {
-//        attach(player)
-//    }
-
-//    val surface = mediaPlayerFactory.videoSurfaces().newVideoSurface(
-//        object : BufferFormatCallback {
-//            override fun getBufferFormat(sourceWidth: Int, sourceHeight: Int): BufferFormat {
-//                return BufferFormat(
-//                    "RV32",
-//                    sourceWidth,
-//                    sourceHeight,
-//                    intArrayOf(sourceWidth * 4),
-//                    intArrayOf(sourceHeight)
-//                )
-//            }
-//
-//            override fun allocatedBuffers(buffers: Array<out ByteBuffer>) {
-//
-//            }
-//        },
-//        { mediaPlayer, nativeBuffers, bufferFormat ->
-//            val buffer = nativeBuffers[0]
-//            val out = ByteArray(buffer.capacity())
-//            buffer.get(out)
-//            val bitmap = Bitmap().apply {
-//                this.allocPixels()
-//                this.installPixels(out)
-//            }
-//            this.bitmap = bitmap
-//        },
-//        false,
-//    ).apply {
-//        attach(player)
-//    }
+    private val factory = MediaPlayerFactory("-v")
+    val player: EmbeddedMediaPlayer = factory
+        .mediaPlayers()
+        .newEmbeddedMediaPlayer()
 
     override val state: MutableStateFlow<PlaybackState> = MutableStateFlow(PlaybackState.PAUSED_BUFFERING)
 
@@ -133,12 +79,6 @@ class VlcjVideoPlayerState(parentCoroutineContext: CoroutineContext) : PlayerSta
     ) : Data(videoSource, videoData, releaseResource)
 
     override suspend fun openSource(source: VideoSource<*>): VlcjData {
-//        if (source !is FileVideoSource) {
-//            throw VideoSourceOpenException(
-//                OpenFailures.UNSUPPORTED_VIDEO_SOURCE,
-//                IllegalStateException("Unsupported video source: $source")
-//            )
-//        }
         if (source is HttpStreamingVideoSource) {
             return VlcjData(
                 source,
@@ -179,7 +119,9 @@ class VlcjVideoPlayerState(parentCoroutineContext: CoroutineContext) : PlayerSta
     }
 
     override fun closeImpl() {
-//        component.release()
+        if (player.media().isValid) {
+            player.controls().pause()
+        }
         lastMedia = null
     }
 
@@ -361,16 +303,14 @@ actual fun VideoPlayer(
     }
 //    DisposableEffect(Unit) { onDispose(mediaPlayer::release) }
 
+    val surface = remember {
+        SkiaBitmapVideoSurface().apply {
+            mediaPlayer.videoSurface().set(this)
+            attach(mediaPlayer)
+        }
+    }
+
     Canvas(modifier) {
-        //        val colorType = config.toSkiaColorType()
-//        val alphaType = if (hasAlpha) ColorAlphaType.PREMUL else ColorAlphaType.OPAQUE
-//        val skiaColorSpace = colorSpace.toSkiaColorSpace()
-//        val colorInfo = ColorInfo(colorType, alphaType, skiaColorSpace)
-//        val imageInfo = ImageInfo(colorInfo, width, height)
-//        val bitmap = Bitmap()
-//        bitmap.allocPixels(imageInfo)
-//        val map =  SkiaBackedImageBitmap(bitmap)
-//        bitmap.readPixels()
         fun calculateImageSizeAndOffsetToFillFrame(
             imageWidth: Int,
             imageHeight: Int,
@@ -391,12 +331,12 @@ actual fun VideoPlayer(
             return Pair(IntSize(finalWidth, finalHeight), IntOffset(offsetX, offsetY))
         }
 
-        val bitmap = playerState.bitmap
+        val bitmap = surface.bitmap ?: return@Canvas
         val (dstSize, dstOffset) = calculateImageSizeAndOffsetToFillFrame(
             bitmap.width, bitmap.height,
             size.width.toInt(), size.height.toInt()
         )
-        drawImage(playerState.bitmap, dstSize = dstSize, dstOffset = dstOffset)
+        drawImage(bitmap, dstSize = dstSize, dstOffset = dstOffset)
     }
 
 //    SwingPanel(
@@ -447,11 +387,4 @@ actual fun VideoPlayer(
 //            surface.removeKeyListener(listener)
 //        }
 //    }
-}
-
-private fun isMacOS(): Boolean {
-    val os = System
-        .getProperty("os.name", "generic")
-        .lowercase(Locale.ENGLISH)
-    return "mac" in os || "darwin" in os
 }
