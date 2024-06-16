@@ -4,11 +4,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
@@ -36,6 +37,8 @@ import me.him188.ani.app.videoplayer.ui.state.SubtitleTrack
 import me.him188.ani.utils.logging.error
 import me.him188.ani.utils.logging.info
 import me.him188.ani.utils.logging.logger
+import org.jetbrains.skia.Image
+import uk.co.caprica.vlcj.factory.MediaPlayerFactory
 import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
 import uk.co.caprica.vlcj.media.Media
 import uk.co.caprica.vlcj.media.MediaEventAdapter
@@ -70,18 +73,19 @@ class VlcjVideoPlayerState(parentCoroutineContext: CoroutineContext) : PlayerSta
     }
 
     init {
-        CallbackMediaPlayerComponent() // init libraries
+        CallbackMediaPlayerComponent().release() // init libraries
     }
 
     val component = run {
-        object : ComposeMediaPlayerComponent("-v") { //"-vv", "--avcodec-hw", "none"
-//            override fun mouseClicked(e: MouseEvent?) {
-//                super.mouseClicked(e)
-//                parent.dispatchEvent(e)
-//            }
-        }
+        SkiaImageVideoSurface()
+//        object : ComposeMediaPlayerComponent("-v") { //"-vv", "--avcodec-hw", "none"
+////            override fun mouseClicked(e: MouseEvent?) {
+////                super.mouseClicked(e)
+////                parent.dispatchEvent(e)
+////            }
+//        }
     }
-    var bitmap: ImageBitmap by component::composeImage
+    val image: Image? by component.image
 
     //    val mediaPlayerFactory = MediaPlayerFactory(
 //        "--video-title=vlcj video output",
@@ -89,7 +93,10 @@ class VlcjVideoPlayerState(parentCoroutineContext: CoroutineContext) : PlayerSta
 //        "--intf=dummy",
 //        "-v"
 //    )
-    val player: EmbeddedMediaPlayer = component.mediaPlayer()
+    val player: EmbeddedMediaPlayer = MediaPlayerFactory("-v").mediaPlayers().newEmbeddedMediaPlayer()
+        .apply {
+            component.attach(this)
+        }
 //        mediaPlayerFactory.mediaPlayers().newEmbeddedMediaPlayer()
 
 //    val surface = SkiaVideoSurface(
@@ -188,7 +195,7 @@ class VlcjVideoPlayerState(parentCoroutineContext: CoroutineContext) : PlayerSta
     }
 
     override fun closeImpl() {
-        component.release()
+        player.release()
         lastMedia = null
     }
 
@@ -377,7 +384,7 @@ class VlcjVideoPlayerState(parentCoroutineContext: CoroutineContext) : PlayerSta
                 )
             }
     }
-    
+
     private fun reloadAudioTracks() {
         audioTracks.candidates.value = player.audio().trackDescriptions()
             .filterNot { it.id() == -1 } // "Disable"
@@ -459,29 +466,39 @@ actual fun VideoPlayer(
         fun calculateImageSizeAndOffsetToFillFrame(
             imageWidth: Int,
             imageHeight: Int,
-            frameWidth: Int,
-            frameHeight: Int
-        ): Pair<IntSize, IntOffset> {
+            frameWidth: Float,
+            frameHeight: Float
+        ): Pair<Size, Offset> {
             // 计算图片和画框的宽高比
-            val imageAspectRatio = imageWidth.toDouble() / imageHeight.toDouble()
+            val imageAspectRatio = imageWidth / imageHeight
 
             // 初始化最终的宽度和高度
-            val finalWidth: Int = frameWidth
-            val finalHeight: Int = (frameWidth / imageAspectRatio).toInt()
+            val finalWidth = frameWidth
+            val finalHeight = (frameWidth / imageAspectRatio)
 
             // 计算左上角的偏移量
-            val offsetX = 0
+            val offsetX = 0f
             val offsetY = (frameHeight - finalHeight) / 2
 
-            return Pair(IntSize(finalWidth, finalHeight), IntOffset(offsetX, offsetY))
+            return Pair(Size(finalWidth, finalHeight), Offset(offsetX, offsetY))
         }
 
-        val bitmap = playerState.bitmap
-        val (dstSize, dstOffset) = calculateImageSizeAndOffsetToFillFrame(
-            bitmap.width, bitmap.height,
-            size.width.toInt(), size.height.toInt()
-        )
-        drawImage(playerState.bitmap, dstSize = dstSize, dstOffset = dstOffset, filterQuality = FilterQuality.High)
+        val image = playerState.image
+        if (image != null) {
+            val (dstSize, dstOffset) = calculateImageSizeAndOffsetToFillFrame(
+                image.width, image.height,
+                size.width, size.height
+            )
+            drawIntoCanvas { canvas ->
+                playerState.image?.let {
+                    canvas.nativeCanvas.drawImageRect(
+                        it,
+                        org.jetbrains.skia.Rect.makeXYWH(dstOffset.x, dstOffset.y, dstSize.width, dstSize.height),
+                    )
+                }
+            }
+        }
+//        drawImage(playerState.bitmap, dstSize = dstSize, dstOffset = dstOffset, filterQuality = FilterQuality.High)
     }
 
 //    SwingPanel(
