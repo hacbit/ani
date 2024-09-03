@@ -9,10 +9,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performMouseInput
@@ -30,6 +33,7 @@ import me.him188.ani.app.ui.foundation.stateOf
 import me.him188.ani.app.ui.foundation.theme.aniDarkColorTheme
 import me.him188.ani.app.ui.framework.runAniComposeUiTest
 import me.him188.ani.app.ui.subject.episode.mediaFetch.rememberTestMediaSelectorPresentation
+import me.him188.ani.app.ui.subject.episode.mediaFetch.rememberTestMediaSourceInfoProvider
 import me.him188.ani.app.ui.subject.episode.mediaFetch.rememberTestMediaSourceResults
 import me.him188.ani.app.ui.subject.episode.statistics.VideoLoadingState
 import me.him188.ani.app.ui.subject.episode.video.sidesheet.rememberTestEpisodeSelectorState
@@ -41,8 +45,6 @@ import me.him188.ani.app.videoplayer.ui.progress.MediaProgressSliderState
 import me.him188.ani.app.videoplayer.ui.progress.PlayerControllerDefaults
 import me.him188.ani.app.videoplayer.ui.progress.TAG_PROGRESS_SLIDER_PREVIEW_POPUP
 import me.him188.ani.app.videoplayer.ui.state.DummyPlayerState
-import me.him188.ani.app.videoplayer.ui.top.PlayerTopBar
-import me.him188.ani.danmaku.ui.DanmakuConfig
 import me.him188.ani.danmaku.ui.DanmakuHostState
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -51,7 +53,6 @@ import kotlin.time.Duration.Companion.seconds
 class EpisodeVideoCursorTest {
 
     private val controllerState = VideoControllerState(ControllerVisibility.Invisible)
-    private val playerState = DummyPlayerState()
     private var currentPositionMillis by mutableLongStateOf(0L)
     private val progressSliderState: MediaProgressSliderState = MediaProgressSliderState(
         { currentPositionMillis },
@@ -75,6 +76,10 @@ class EpisodeVideoCursorTest {
     @Composable
     private fun Player(gestureFamily: GestureFamily = GestureFamily.MOUSE) {
         ProvideCompositionLocalsForPreview(colorScheme = aniDarkColorTheme()) {
+            val scope = rememberCoroutineScope()
+            val playerState = remember {
+                DummyPlayerState(scope.coroutineContext)
+            }
             Row {
                 EpisodeVideoImpl(
                     playerState = playerState,
@@ -82,12 +87,11 @@ class EpisodeVideoCursorTest {
                     hasNextEpisode = true,
                     onClickNextEpisode = {},
                     videoControllerState = controllerState,
-                    title = { PlayerTopBar() },
+                    title = { Text("Title") },
                     danmakuHostState = remember { DanmakuHostState() },
                     danmakuEnabled = false,
                     onToggleDanmaku = {},
                     videoLoadingState = { VideoLoadingState.Succeed(isBt = true) },
-                    danmakuConfig = { DanmakuConfig.Default },
                     onClickFullScreen = {},
                     onExitFullscreen = {},
                     danmakuEditor = {},
@@ -100,14 +104,14 @@ class EpisodeVideoCursorTest {
                             enabled = false,
                         )
                     },
-                    leftBottomTips = {},
                     progressSliderState = progressSliderState,
-                    danmakuFrozen = true,
-                    gestureFamily = gestureFamily,
                     mediaSelectorPresentation = rememberTestMediaSelectorPresentation(),
                     mediaSourceResultsPresentation = rememberTestMediaSourceResults(),
                     episodeSelectorState = rememberTestEpisodeSelectorState(),
+                    mediaSourceInfoProvider = rememberTestMediaSourceInfoProvider(),
+                    leftBottomTips = {},
                     modifier = Modifier.weight(1f),
+                    gestureFamily = gestureFamily,
                 )
 
                 Column(Modifier.fillMaxHeight().requiredWidth(100.dp)) {
@@ -208,21 +212,22 @@ class EpisodeVideoCursorTest {
         setContent {
             Player(gestureFamily = GestureFamily.MOUSE)
         }
+        val root = onAllNodes(isRoot()).onFirst()
         runOnIdle {
             assertEquals(true, controllerState.visibility.topBar)
             waitUntil { cursorVisible.exists() } // 因为没有 hover
-            onRoot().performMouseInput {
+            root.performMouseInput {
                 moveTo(centerRight) // 初始在视频外面
             }
         }
         mainClock.autoAdvance = false
         runOnIdle {
-            onRoot().performMouseInput {
+            root.performMouseInput {
                 moveTo(center)
             }
             // 目前的 controller mouseHoverForController 依赖 Move 事件, 但 compose 似乎有点问题
             // 所以额外广播一个事件
-            onRoot().performTouchInput {
+            root.performTouchInput {
                 swipe(center, center - Offset(1f, 1f))
             }
         }

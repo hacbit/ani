@@ -17,11 +17,9 @@
  */
 
 @file:Suppress("UnstableApiUsage")
-@file:OptIn(ExperimentalKotlinGradlePluginApi::class)
 
 import com.google.devtools.ksp.gradle.KspTaskJvm
 import com.google.devtools.ksp.gradle.KspTaskNative
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompileTool
 
 
@@ -53,7 +51,21 @@ atomicfu {
     transformJvm = false // 这东西很不靠谱, 等 atomicfu 正式版了可能可以考虑下
 }
 
+val enableIosFramework = getPropertyOrNull("ani.build.framework") != "false"
+
 kotlin {
+    if (enableIosFramework) {
+        listOf(
+            iosArm64(),
+            iosSimulatorArm64(),
+        ).forEach { iosTarget ->
+            iosTarget.binaries.framework {
+                baseName = "ComposeApp"
+                isStatic = false
+            }
+        }
+    }
+
     sourceSets.commonMain.dependencies {
         api(libs.kotlinx.coroutines.core)
         api(libs.kotlinx.serialization.json)
@@ -71,6 +83,10 @@ kotlin {
         api(compose.material3)
         api(compose.materialIconsExtended)
         api(compose.runtime)
+        api(libs.compose.lifecycle.viewmodel.compose)
+        api(libs.compose.lifecycle.runtime.compose)
+        api(libs.compose.navigation.compose)
+        api(libs.compose.navigation.runtime)
         implementation(compose.components.resources)
         implementation(libs.reorderable)
 
@@ -85,6 +101,8 @@ kotlin {
         api(projects.utils.coroutines)
         api(projects.utils.io)
         api(projects.app.shared.imageViewer)
+        api(projects.utils.xml)
+        api(projects.utils.bbcode)
 
         // Ktor
         api(libs.ktor.client.websockets)
@@ -101,24 +119,11 @@ kotlin {
         api(libs.coil.network.ktor2)
         api(libs.datastore.core) // Data Persistence
         api(libs.datastore.preferences.core) // Preferences
-        api(libs.precompose) // Navigator
-        api(libs.precompose.koin) // Navigator
-        api(libs.precompose.viewmodel) // Navigator
         implementation(libs.androidx.room.runtime.get().toString()) {
             exclude("org.jetbrains.kotlinx", "atomicfu")
         } // multi-platform database
         api(libs.sqlite.bundled) // database driver implementation
-
-        // Torrent
-        implementation(libs.bencode)
-
         implementation(libs.constraintlayout.compose)
-
-        implementation(libs.jna)
-
-        implementation(libs.slf4j.api)
-
-        implementation(projects.utils.bbcode)
     }
 
     // shared by android and desktop
@@ -135,6 +140,8 @@ kotlin {
         api(projects.dataSources.jellyfin)
         api(projects.dataSources.ikaros)
 
+        implementation(libs.jna)
+        implementation(libs.slf4j.api)
         api(libs.ktor.client.okhttp)
     }
 
@@ -150,6 +157,7 @@ kotlin {
         api(libs.androidx.appcompat)
         api(libs.androidx.media)
         api(libs.androidx.core.ktx)
+        api(libs.androidx.activity.compose)
         api(libs.koin.android)
         implementation(libs.androidx.browser)
 
@@ -190,8 +198,6 @@ kotlin {
 //        implementation(libs.javafx.graphics)
 
         // https://repo1.maven.org/maven2/org/openjfx/javafx-graphics/17.0.11/
-        val os = getOs()
-
         runtimeOnly(libs.kotlinx.coroutines.debug)
 
         implementation(libs.log4j.core)
@@ -297,19 +303,9 @@ room {
 
 // BUILD CONFIG
 
-val bangumiClientAndroidAppId = getPropertyOrNull("bangumi.oauth.client.android.appId")
-val bangumiClientAndroidSecret = getPropertyOrNull("bangumi.oauth.client.android.secret")
-
-val bangumiClientDesktopAppId = getPropertyOrNull("bangumi.oauth.client.desktop.appId")
-val bangumiClientDesktopSecret = getPropertyOrNull("bangumi.oauth.client.desktop.secret")
-
 val aniAuthServerUrlDebug =
     getPropertyOrNull("ani.auth.server.url.debug") ?: "https://auth.myani.org"
 val aniAuthServerUrlRelease = getPropertyOrNull("ani.auth.server.url.release") ?: "https://auth.myani.org"
-
-if (bangumiClientAndroidAppId == null || bangumiClientAndroidSecret == null) {
-    logger.warn("i:: bangumi.oauth.client.android.appId or bangumi.oauth.client.android.secret is not set. Bangumi authorization will not work. Get a token from https://bgm.tv/dev/app and set them in local.properties.")
-}
 
 //if (bangumiClientDesktopAppId == null || bangumiClientDesktopSecret == null) {
 //    logger.warn("bangumi.oauth.client.desktop.appId or bangumi.oauth.client.desktop.secret is not set. Bangumi authorization will not work. Get a token from https://bgm.tv/dev/app and set them in local.properties.")
@@ -321,8 +317,6 @@ android {
     defaultConfig {
         minSdk = getIntProperty("android.min.sdk")
         buildConfigField("String", "VERSION_NAME", "\"${getProperty("version.name")}\"")
-        buildConfigField("String", "BANGUMI_OAUTH_CLIENT_APP_ID", "\"$bangumiClientAndroidAppId\"")
-        buildConfigField("String", "BANGUMI_OAUTH_CLIENT_SECRET", "\"$bangumiClientAndroidSecret\"")
     }
     buildTypes.getByName("release") {
         isMinifyEnabled = false // shared 不能 minify, 否则构建 app 会失败
@@ -382,8 +376,6 @@ val generateAniBuildConfigDesktop = tasks.register("generateAniBuildConfigDeskto
     }
 
     inputs.property("project.version", project.version)
-    inputs.property("bangumiClientAppIdDesktop", bangumiClientDesktopAppId).optional(true)
-    inputs.property("bangumiClientSecret", bangumiClientDesktopSecret).optional(true)
 
     outputs.file(file)
 
@@ -391,8 +383,6 @@ val generateAniBuildConfigDesktop = tasks.register("generateAniBuildConfigDeskto
             package me.him188.ani.app.platform
             object AniBuildConfigDesktop : AniBuildConfig {
                 override val versionName = "${project.version}"
-                override val bangumiOauthClientAppId = "$bangumiClientDesktopAppId"
-                override val bangumiOauthClientSecret = "$bangumiClientDesktopSecret"
                 override val isDebug = System.getenv("ANI_DEBUG") == "true" || System.getProperty("ani.debug") == "true"
                 override val aniAuthServerUrl = if (isDebug) "$aniAuthServerUrlDebug" else "$aniAuthServerUrlRelease"
             }
@@ -414,8 +404,6 @@ val generateAniBuildConfigIos = tasks.register("generateAniBuildConfigIos") {
     }
 
     inputs.property("project.version", project.version)
-    inputs.property("bangumiClientAppIdDesktop", bangumiClientDesktopAppId).optional(true)
-    inputs.property("bangumiClientSecret", bangumiClientDesktopSecret).optional(true)
 
     outputs.file(file)
 
@@ -423,8 +411,6 @@ val generateAniBuildConfigIos = tasks.register("generateAniBuildConfigIos") {
             package me.him188.ani.app.platform
             object AniBuildConfigIos : AniBuildConfig {
                 override val versionName = "${project.version}"
-                override val bangumiOauthClientAppId = "$bangumiClientDesktopAppId"
-                override val bangumiOauthClientSecret = "$bangumiClientDesktopSecret"
                 override val isDebug = false
                 override val aniAuthServerUrl = if (isDebug) "$aniAuthServerUrlDebug" else "$aniAuthServerUrlRelease"
             }
@@ -459,3 +445,29 @@ tasks.withType(KspTaskNative::class.java) {
     dependsOn(generateAniBuildConfigIos)
 }
 
+// 太耗内存了, 只能一次跑一个
+// compose bug, 不能用这个 https://youtrack.jetbrains.com/issue/CMP-5835
+//tasks.filter { it.name.contains("link") && it.name.contains("Framework") && it.name.contains("Ios") }
+//    .sorted()
+//    .let { links ->
+//        links.forEachIndexed { index, task ->
+//            for (index1 in (index + 1)..links.lastIndex) {
+//                task.mustRunAfter(links[index1])
+//            }
+//        }
+//    }
+
+if (enableIosFramework) {
+    tasks.named("linkDebugFrameworkIosArm64") {
+        mustRunAfter("linkReleaseFrameworkIosArm64")
+        mustRunAfter("linkDebugFrameworkIosSimulatorArm64")
+        mustRunAfter("linkReleaseFrameworkIosSimulatorArm64")
+    }
+    tasks.named("linkReleaseFrameworkIosArm64") {
+        mustRunAfter("linkDebugFrameworkIosSimulatorArm64")
+        mustRunAfter("linkReleaseFrameworkIosSimulatorArm64")
+    }
+    tasks.named("linkDebugFrameworkIosSimulatorArm64") {
+        mustRunAfter("linkReleaseFrameworkIosSimulatorArm64")
+    }
+}

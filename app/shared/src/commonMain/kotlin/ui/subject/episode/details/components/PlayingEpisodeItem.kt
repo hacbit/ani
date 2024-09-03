@@ -36,7 +36,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,13 +43,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import me.him188.ani.app.platform.currentPlatform
+import me.him188.ani.app.platform.isAndroid
 import me.him188.ani.app.ui.foundation.icons.PlayingIcon
 import me.him188.ani.app.ui.foundation.layout.paddingIfNotEmpty
 import me.him188.ani.app.ui.foundation.text.ProvideContentColor
 import me.him188.ani.app.ui.foundation.text.ProvideTextStyleContentColor
 import me.him188.ani.app.ui.settings.rendering.MediaSourceIcons
-import me.him188.ani.app.ui.settings.rendering.renderMediaSource
 import me.him188.ani.datasources.api.Media
+import me.him188.ani.datasources.api.source.MediaSourceInfo
 
 /**
  * 剧集详情页中的正在播放的剧集卡片. 需要放在合适的 `Card` 中.
@@ -72,7 +73,11 @@ fun PlayingEpisodeItem(
     mediaSource: @Composable RowScope.() -> Unit,
     actions: @Composable RowScope.() -> Unit = {},
     modifier: Modifier = Modifier,
-    playingIcon: @Composable () -> Unit = { PlayingIcon() },
+    playingIcon: @Composable () -> Unit = {
+        if (currentPlatform.isAndroid()) {
+            PlayingIcon() // 这个动画跑满帧率, 在渲染效率低的 PC 上会跑满 CPU
+        }
+    },
     rowSpacing: Dp = 16.dp,
     horizontalPadding: Dp = 20.dp,
 ) {
@@ -226,6 +231,7 @@ object PlayingEpisodeItemDefaults {
     @Composable
     fun MediaSource(
         media: Media?,
+        mediaSourceInfo: MediaSourceInfo?,
         isLoading: Boolean,
         onClick: () -> Unit,
         modifier: Modifier = Modifier,
@@ -240,7 +246,7 @@ object PlayingEpisodeItemDefaults {
                     Icon(MediaSourceIcons.location(media.location, media.kind), null)
 
                     Text(
-                        remember(media.mediaSourceId) { renderMediaSource(media.mediaSourceId) },
+                        mediaSourceInfo?.displayName ?: "未知",
                         Modifier.padding(start = 12.dp).align(Alignment.CenterVertically),
                         maxLines = 1,
                         softWrap = false,

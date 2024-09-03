@@ -61,6 +61,14 @@ enum torrent_state_t {
 };
 
 struct torrent_stats_t {
+    int64_t total = 0;
+
+    int64_t total_done = 0;
+    int64_t total_upload = 0;
+
+    int64_t all_time_upload = 0;
+    int64_t all_time_download = 0;
+    
     int download_payload_rate = 0;
     int upload_payload_rate = 0;
 
@@ -101,6 +109,8 @@ class event_listener_t { // inherited from Kotlin
     virtual ~event_listener_t() = default;
 
     virtual void on_checked(handle_id_t handle_id) {}
+
+    virtual void on_metadata_received(handle_id_t handle_id) {}
     virtual void on_torrent_added(handle_id_t handle_id) {}
     virtual void on_save_resume_data(handle_id_t handle_id, torrent_resume_data_t &data) {}
     virtual void on_torrent_state_changed(handle_id_t handle_id, torrent_state_t state) {}

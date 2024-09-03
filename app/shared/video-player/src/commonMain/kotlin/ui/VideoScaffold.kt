@@ -160,7 +160,6 @@ fun VideoScaffold(
                     Box(Modifier.weight(1f, fill = true).fillMaxWidth())
 
                     Column { 
-                        leftBottomTips()
                         // 底部控制栏: 播放/暂停, 进度条, 切换全屏
                         AnimatedVisibility(
                             visible = controllerState.visibility.bottomBar && !gestureLockedState,
@@ -185,8 +184,10 @@ fun VideoScaffold(
                                     Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    CompositionLocalProvider(LocalContentColor provides Color.White) {
-                                        bottomBar()
+                                    MaterialTheme(aniDarkColorTheme()) {
+                                        CompositionLocalProvider(LocalContentColor provides Color.White) {
+                                            bottomBar()
+                                        }
                                     }
                                 }
                             }
@@ -248,6 +249,17 @@ fun VideoScaffold(
                 }
             }
 
+            Box(Modifier.matchParentSize()) {
+                Column {
+                    Box(Modifier.weight(0.5f))
+                    Row(
+                        Modifier.weight(0.5f),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        leftBottomTips()
+                    }
+                }
+            }
             // 悬浮消息, 例如正在缓冲
             Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
                 ProvideTextStyle(MaterialTheme.typography.labelSmall) {

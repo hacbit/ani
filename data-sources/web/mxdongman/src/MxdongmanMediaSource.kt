@@ -6,10 +6,12 @@ import io.ktor.client.request.parameter
 import me.him188.ani.datasources.api.matcher.WebVideo
 import me.him188.ani.datasources.api.matcher.WebVideoMatcher
 import me.him188.ani.datasources.api.matcher.WebVideoMatcherContext
+import me.him188.ani.datasources.api.source.FactoryId
 import me.him188.ani.datasources.api.source.MediaFetchRequest
 import me.him188.ani.datasources.api.source.MediaSource
 import me.him188.ani.datasources.api.source.MediaSourceConfig
 import me.him188.ani.datasources.api.source.MediaSourceFactory
+import me.him188.ani.datasources.api.source.MediaSourceInfo
 import me.him188.ani.datasources.api.source.ThreeStepWebMediaSource
 import me.him188.ani.datasources.api.source.bodyAsDocument
 import me.him188.ani.datasources.api.source.useHttpClient
@@ -36,19 +38,28 @@ class MxdongmanWebVideoMatcher : WebVideoMatcher {
     }
 }
 
+private const val BASE_URL = "https://www.mxdm.xyz"
+
 class MxdongmanMediaSource(config: MediaSourceConfig) : ThreeStepWebMediaSource() {
     companion object {
         const val ID = "mxdongman"
-
+        val INFO = MediaSourceInfo(
+            "MX 动漫",
+            websiteUrl = BASE_URL,
+            iconUrl = "$BASE_URL/favicon.ico",
+            iconResourceId = "mxdongman.png",
+        )
     }
 
     class Factory : MediaSourceFactory {
-        override val mediaSourceId: String get() = ID
+        override val factoryId: FactoryId get() = me.him188.ani.datasources.api.source.FactoryId(ID)
 
-        override fun create(config: MediaSourceConfig): MediaSource = MxdongmanMediaSource(config)
+        override val info: MediaSourceInfo get() = INFO
+        override fun create(mediaSourceId: String, config: MediaSourceConfig): MediaSource =
+            MxdongmanMediaSource(config)
     }
 
-    override val baseUrl: String get() = "https://www.mxdm.xyz"
+    override val baseUrl: String get() = BASE_URL
 
     // https://www.mxdm4.com/search/-------------.html?wd=%E6%A8%B1trick
     override fun parseBangumiSearch(document: Document): List<Bangumi> {
@@ -125,4 +136,5 @@ class MxdongmanMediaSource(config: MediaSourceConfig) : ThreeStepWebMediaSource(
     }
 
     override val mediaSourceId: String get() = ID
+    override val info: MediaSourceInfo get() = INFO
 }

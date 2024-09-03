@@ -1,17 +1,12 @@
 package me.him188.ani.app.data.source.media
 
-import kotlinx.coroutines.flow.MutableStateFlow
-import me.him188.ani.app.data.source.media.cache.MediaCacheManager
-import me.him188.ani.app.data.source.media.cache.TestMediaCache
-import me.him188.ani.datasources.api.CachedMedia
 import me.him188.ani.datasources.api.DefaultMedia
 import me.him188.ani.datasources.api.EpisodeSort
-import me.him188.ani.datasources.api.MediaCacheMetadata
 import me.him188.ani.datasources.api.MediaExtraFiles
 import me.him188.ani.datasources.api.MediaProperties
 import me.him188.ani.datasources.api.Subtitle
 import me.him188.ani.datasources.api.SubtitleKind
-import me.him188.ani.datasources.api.source.MediaFetchRequest
+import me.him188.ani.datasources.api.source.MediaSourceInfo
 import me.him188.ani.datasources.api.source.MediaSourceKind
 import me.him188.ani.datasources.api.source.MediaSourceLocation
 import me.him188.ani.datasources.api.topic.EpisodeRange
@@ -28,11 +23,40 @@ const val SOURCE_DMHY = "dmhy"
 @TestOnly
 const val SOURCE_ACG = "acg.rip"
 
+@TestOnly
+fun createTestDefaultMedia(
+    mediaId: String,
+    mediaSourceId: String, // e.g. "dmhy"
+    originalUrl: String,
+    download: ResourceLocation,
+    originalTitle: String,
+    publishedTime: Long,
+    properties: MediaProperties,
+    episodeRange: EpisodeRange?,
+    extraFiles: MediaExtraFiles = MediaExtraFiles.Empty,
+    location: MediaSourceLocation,
+    kind: MediaSourceKind,
+//    mediaSourceInstanceId: String = mediaSourceId,
+): DefaultMedia = DefaultMedia(
+    mediaId = mediaId,
+    mediaSourceId = mediaSourceId,
+//    mediaSourceInstanceId = mediaSourceInstanceId,
+    originalUrl = originalUrl,
+    download = download,
+    originalTitle = originalTitle,
+    publishedTime = publishedTime,
+    properties = properties,
+    episodeRange = episodeRange,
+    extraFiles = extraFiles,
+    location = location,
+    kind = kind,
+)
+
 // Used by many test, don't change it. 
 // If you want to change it, copy it instead.
 @TestOnly
 val TestMediaList = listOf(
-    DefaultMedia(
+    createTestDefaultMedia(
         mediaId = "$SOURCE_DMHY.1",
         mediaSourceId = SOURCE_DMHY,
         originalTitle = "[桜都字幕组] 孤独摇滚 ABC ABC ABC ABC ABC ABC ABC ABC ABC ABC",
@@ -60,7 +84,7 @@ val TestMediaList = listOf(
         ),
     ),
     // exactly same properties as the first one, except for the ids.
-    DefaultMedia(
+    createTestDefaultMedia(
         mediaId = "$SOURCE_ACG.1",
         mediaSourceId = SOURCE_ACG,
         originalTitle = "[桜都字幕组] 孤独摇滚 ABC ABC ABC ABC ABC ABC ABC ABC ABC ABC",
@@ -79,7 +103,7 @@ val TestMediaList = listOf(
         location = MediaSourceLocation.Online,
     ),
 
-    DefaultMedia(
+    createTestDefaultMedia(
         mediaId = "$SOURCE_DMHY.2",
         mediaSourceId = SOURCE_DMHY,
         originalTitle = "夜晚的水母不会游泳",
@@ -97,7 +121,7 @@ val TestMediaList = listOf(
         kind = MediaSourceKind.BitTorrent,
         location = MediaSourceLocation.Online,
     ),
-    DefaultMedia(
+    createTestDefaultMedia(
         mediaId = "$SOURCE_ACG.2",
         mediaSourceId = SOURCE_ACG,
         originalTitle = "葬送的芙莉莲",
@@ -115,7 +139,7 @@ val TestMediaList = listOf(
         kind = MediaSourceKind.BitTorrent,
         location = MediaSourceLocation.Online,
     ),
-    DefaultMedia(
+    createTestDefaultMedia(
         mediaId = "$SOURCE_ACG.3",
         mediaSourceId = SOURCE_ACG,
         originalTitle = "某个生肉",
@@ -136,21 +160,4 @@ val TestMediaList = listOf(
 )
 
 @TestOnly
-val TestMediaCache1 = TestMediaCache(
-    CachedMedia(
-        TestMediaList[0],
-        MediaCacheManager.LOCAL_FS_MEDIA_SOURCE_ID,
-        ResourceLocation.MagnetLink("magnet:?xt=urn:btih:1"),
-    ),
-    MediaCacheMetadata(
-        MediaFetchRequest(
-            subjectId = "123123",
-            episodeId = "1231231",
-            subjectNames = setOf("孤独摇滚"),
-            episodeSort = EpisodeSort("01"),
-            episodeName = "测试剧集",
-        ),
-    ),
-    progress = MutableStateFlow(0.9999f),
-    totalSize = MutableStateFlow(233.megaBytes),
-)
+val TestMediaSourceInfo = MediaSourceInfo("Mikan")

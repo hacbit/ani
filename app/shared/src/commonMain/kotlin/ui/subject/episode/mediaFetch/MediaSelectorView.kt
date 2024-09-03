@@ -35,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import me.him188.ani.app.tools.formatDateTime
 import me.him188.ani.app.ui.foundation.widgets.FastLinearProgressIndicator
 import me.him188.ani.app.ui.settings.rendering.MediaSourceIcons
-import me.him188.ani.app.ui.settings.rendering.renderMediaSource
 import me.him188.ani.app.ui.subject.episode.details.renderSubtitleLanguage
 import me.him188.ani.datasources.api.Media
 import me.him188.ani.datasources.api.topic.FileSize
@@ -117,6 +116,7 @@ fun MediaSelectorView(
                 Column {
                     MediaItem(
                         item,
+                        state.mediaSourceInfoProvider,
                         state.selected == item,
                         state,
                         onClick = { onClickItem(item) },
@@ -153,6 +153,7 @@ fun MediaSelectorView(
 @Composable
 private fun MediaItem(
     media: Media,
+    mediaSourceInfoProvider: MediaSourceInfoProvider,
     selected: Boolean,
     state: MediaSelectorPresentation,
     onClick: () -> Unit,
@@ -226,7 +227,8 @@ private fun MediaItem(
                             Icon(MediaSourceIcons.location(media.location, media.kind), null)
 
                             Text(
-                                remember(media.mediaSourceId) { renderMediaSource(media.mediaSourceId) },
+                                mediaSourceInfoProvider.rememberMediaSourceInfo(media.mediaSourceId).value?.displayName
+                                    ?: "未知",
                                 maxLines = 1,
                                 softWrap = false,
                             )

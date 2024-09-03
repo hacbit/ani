@@ -56,6 +56,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
@@ -84,6 +89,8 @@ import me.him188.ani.app.videoplayer.ui.guesture.GestureIndicatorState.State.SEE
 import me.him188.ani.app.videoplayer.ui.guesture.GestureIndicatorState.State.VOLUME
 import me.him188.ani.app.videoplayer.ui.guesture.SwipeSeekerState.Companion.swipeToSeek
 import me.him188.ani.app.videoplayer.ui.progress.MediaProgressSliderState
+import me.him188.ani.app.videoplayer.ui.state.PlayerState
+import me.him188.ani.app.videoplayer.ui.state.SupportsAudio
 import me.him188.ani.app.videoplayer.ui.top.needWorkaroundForFocusManager
 import me.him188.ani.datasources.bangumi.processing.fixToString
 import kotlin.math.absoluteValue
@@ -367,6 +374,7 @@ enum class GestureFamily(
     val keyboardLeftRightToSeek: Boolean = true,
     val mouseHoverForController: Boolean = true, // not supported on mobile
     val escToExitFullscreen: Boolean = true,
+    val scrollForVolume: Boolean,
 ) {
     TOUCH(
         useDesktopGestureLayoutWorkaround = false,
@@ -379,6 +387,7 @@ enum class GestureFamily(
         swipeLhsForBrightness = true,
         longPressForFastSkip = true,
         mouseHoverForController = false,
+        scrollForVolume = false,
     ),
     MOUSE(
         useDesktopGestureLayoutWorkaround = true,
@@ -390,6 +399,7 @@ enum class GestureFamily(
         swipeRhsForVolume = false,
         swipeLhsForBrightness = false,
         longPressForFastSkip = false,
+        scrollForVolume = true,
     )
 }
 
@@ -402,6 +412,7 @@ fun VideoGestureHost(
     progressSliderState: MediaProgressSliderState,
     indicatorState: GestureIndicatorState,
     fastSkipState: FastSkipState,
+    playerState: PlayerState,
     enableSwipeToSeek: Boolean,
     modifier: Modifier = Modifier,
     family: GestureFamily = currentPlatform.mouseFamily,
@@ -461,14 +472,42 @@ fun VideoGestureHost(
                             },
                         )
                     }
-                    .ifThen(family.keyboardUpDownForVolume) {
-                        audioController?.let { controller ->
-                            onKey(ComposeKey.DirectionUp) {
-                                controller.increaseLevel(0.10f)
+                    .ifThen(family.keyboardUpDownForVolume && playerState is SupportsAudio) {
+                        if (playerState !is SupportsAudio) {
+                            return@ifThen this
+                        }
+                        onKeyEvent {
+                            if (it.type == KeyEventType.KeyUp) return@onKeyEvent false
+                            val consumed = when {
+                                it.isShiftPressed && it.key == ComposeKey.DirectionUp -> {
+                                    playerState.volumeUp(0.01f)
+                                    true
+                                }
+
+                                it.isShiftPressed && it.key == ComposeKey.DirectionDown -> {
+                                    playerState.volumeDown(0.01f)
+                                    true
+                                }
+
+                                it.key == ComposeKey.DirectionUp -> {
+                                    playerState.volumeUp()
+                                    true
+                                }
+
+                                it.key == ComposeKey.DirectionDown -> {
+                                    playerState.volumeDown()
+                                    true
+                                }
+
+                                else -> false
                             }
-                            onKey(ComposeKey.DirectionDown) {
-                                controller.decreaseLevel(0.10f)
+                            if (consumed) {
+                                playerState.toggleMute(false)
+                                indicatorTasker.launch {
+                                    indicatorState.showVolumeRange(playerState.volume.value / playerState.maxValue)
+                                }
                             }
+                            consumed
                         }
                     }
                     .ifThen(family.keyboardSpaceForPauseResume) {
@@ -502,6 +541,21 @@ fun VideoGestureHost(
                                 manager.clearFocus()
                             }
                             onExitFullscreen()
+                        }
+                    }.ifThen(family.scrollForVolume && playerState is SupportsAudio) {
+                        if (playerState !is SupportsAudio) {
+                            return@ifThen this
+                        }
+                        onPointerEventMultiplatform(PointerEventType.Scroll) { event ->
+                            event.changes.firstOrNull()?.scrollDelta?.y?.run {
+                                playerState.toggleMute(false)
+                                if (this < 0) playerState.volumeUp()
+                                else if (this > 0) playerState.volumeDown()
+
+                                indicatorTasker.launch {
+                                    indicatorState.showVolumeRange(playerState.volume.value / playerState.maxValue)
+                                }
+                            }
                         }
                     }
                     .fillMaxSize(),

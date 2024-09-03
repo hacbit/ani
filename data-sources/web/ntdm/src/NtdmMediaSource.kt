@@ -7,10 +7,12 @@ import io.ktor.client.request.parameter
 import me.him188.ani.datasources.api.matcher.WebVideo
 import me.him188.ani.datasources.api.matcher.WebVideoMatcher
 import me.him188.ani.datasources.api.matcher.WebVideoMatcherContext
+import me.him188.ani.datasources.api.source.FactoryId
 import me.him188.ani.datasources.api.source.MediaFetchRequest
 import me.him188.ani.datasources.api.source.MediaSource
 import me.him188.ani.datasources.api.source.MediaSourceConfig
 import me.him188.ani.datasources.api.source.MediaSourceFactory
+import me.him188.ani.datasources.api.source.MediaSourceInfo
 import me.him188.ani.datasources.api.source.ThreeStepWebMediaSource
 import me.him188.ani.datasources.api.source.bodyAsDocument
 import me.him188.ani.datasources.api.source.useHttpClient
@@ -40,12 +42,20 @@ class NtdmMediaSource(config: MediaSourceConfig) : ThreeStepWebMediaSource() {
     companion object {
         const val ID = "ntdm"
         const val BASE_URL = "https://www.ntdm9.com"
+        val INFO = MediaSourceInfo(
+            "NT 动漫",
+            websiteUrl = BASE_URL,
+            iconUrl = "https://cdn.yinghuazy.xyz/webjs/ntdm8/image/favicon.ico",
+            iconResourceId = "ntdm.png",
+        )
     }
 
     class Factory : MediaSourceFactory {
-        override val mediaSourceId: String get() = ID
+        override val factoryId: FactoryId get() = me.him188.ani.datasources.api.source.FactoryId(ID)
 
-        override fun create(config: MediaSourceConfig): MediaSource = NtdmMediaSource(config)
+        override val info: MediaSourceInfo get() = INFO
+
+        override fun create(mediaSourceId: String, config: MediaSourceConfig): MediaSource = NtdmMediaSource(config)
     }
 
     override val baseUrl: String get() = BASE_URL
@@ -103,4 +113,5 @@ class NtdmMediaSource(config: MediaSourceConfig) : ThreeStepWebMediaSource() {
     }
 
     override val mediaSourceId: String get() = ID
+    override val info: MediaSourceInfo get() = INFO
 }

@@ -1,22 +1,30 @@
 package me.him188.ani.datasources.jellyfin
 
+import me.him188.ani.datasources.api.source.FactoryId
 import me.him188.ani.datasources.api.source.MediaSource
 import me.him188.ani.datasources.api.source.MediaSourceConfig
 import me.him188.ani.datasources.api.source.MediaSourceFactory
+import me.him188.ani.datasources.api.source.MediaSourceInfo
 import me.him188.ani.datasources.api.source.MediaSourceKind
-import me.him188.ani.datasources.api.source.MediaSourceParameters
-import me.him188.ani.datasources.api.source.MediaSourceParametersBuilder
 import me.him188.ani.datasources.api.source.get
+import me.him188.ani.datasources.api.source.parameter.MediaSourceParameters
+import me.him188.ani.datasources.api.source.parameter.MediaSourceParametersBuilder
 
 class JellyfinMediaSource(config: MediaSourceConfig) : BaseJellyfinMediaSource(config) {
     companion object {
         const val ID = "jellyfin"
+        val INFO = MediaSourceInfo(
+            displayName = "Jellyfin",
+            description = "Jellyfin Media Server",
+            websiteUrl = "https://jellyfin.org",
+            iconUrl = "https://jellyfin.org/images/favicon.ico",
+        )
     }
 
     object Parameters : MediaSourceParametersBuilder() {
         val baseUrl = string(
             "baseUrl",
-            default = "http://localhost:8096",
+            defaultProvider = { "http://localhost:8096" },
             description = "服务器地址\n示例: http://localhost:8096",
         )
         val userId = string(
@@ -30,13 +38,16 @@ class JellyfinMediaSource(config: MediaSourceConfig) : BaseJellyfinMediaSource(c
     }
 
     class Factory : MediaSourceFactory {
-        override val mediaSourceId: String get() = ID
+        override val factoryId: FactoryId get() = FactoryId(ID)
+
         override val parameters: MediaSourceParameters = Parameters.build()
+        override val info: MediaSourceInfo get() = INFO
         override val allowMultipleInstances: Boolean get() = true
-        override fun create(config: MediaSourceConfig): MediaSource = JellyfinMediaSource(config)
+        override fun create(mediaSourceId: String, config: MediaSourceConfig): MediaSource = JellyfinMediaSource(config)
     }
 
     override val kind: MediaSourceKind get() = MediaSourceKind.WEB
+    override val info: MediaSourceInfo = INFO
     override val mediaSourceId: String get() = ID
     override val baseUrl = config[Parameters.baseUrl].removeSuffix("/")
     override val userId = config[Parameters.userId]

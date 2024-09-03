@@ -35,6 +35,7 @@ import androidx.compose.ui.window.WindowState
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import me.him188.ani.app.platform.window.LocalPlatformWindow
 import me.him188.ani.app.platform.window.PlatformWindow
 import me.him188.ani.app.platform.window.WindowUtils
 import me.him188.ani.utils.io.SystemPath
@@ -102,11 +103,19 @@ inline fun Context.checkIsDesktop(): DesktopContext {
 @Composable
 actual fun isInLandscapeMode(): Boolean = false
 
-actual fun Context.setRequestFullScreen(window: PlatformWindow, fullscreen: Boolean) {
+actual suspend fun Context.setRequestFullScreen(window: PlatformWindow, fullscreen: Boolean) {
     checkIsDesktop()
 //    extraWindowProperties.undecorated = fullscreen // Exception in thread "main" java.awt.IllegalComponentStateException: The frame is displayable.
-    WindowUtils.setFullscreen(window, fullscreen)
-    windowState.placement = if (fullscreen) WindowPlacement.Fullscreen else WindowPlacement.Floating
+    if (currentPlatform is Platform.Windows) {
+        if (fullscreen) {
+            // hi, 相信前人的智慧, 如果操作不当会导致某些 Windows 设备上全屏会白屏 (你的电脑不一定能复现)
+            WindowUtils.setUndecoratedFullscreen(window, true)
+        } else {
+            WindowUtils.setUndecoratedFullscreen(window, false)
+        }
+    } else {
+        windowState.placement = if (fullscreen) WindowPlacement.Fullscreen else WindowPlacement.Floating
+    }
 }
 
 internal actual val Context.filesImpl: ContextFiles
@@ -118,6 +127,9 @@ internal actual val Context.filesImpl: ContextFiles
 @Composable
 actual fun isSystemInFullscreenImpl(): Boolean {
     val context = LocalDesktopContext.current
+    if (currentPlatform is Platform.Windows) {
+        return LocalPlatformWindow.current.isUndecoratedFullscreen
+    }
     // should be true
     val placement by rememberUpdatedState(context.windowState.placement)
     val isFullscreen by remember { derivedStateOf { placement == WindowPlacement.Fullscreen } }

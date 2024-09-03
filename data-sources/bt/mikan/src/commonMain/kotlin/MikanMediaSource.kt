@@ -35,6 +35,7 @@ import kotlinx.datetime.toInstant
 import me.him188.ani.datasources.api.paging.SinglePagePagedSource
 import me.him188.ani.datasources.api.paging.SizedSource
 import me.him188.ani.datasources.api.source.ConnectionStatus
+import me.him188.ani.datasources.api.source.FactoryId
 import me.him188.ani.datasources.api.source.HttpMediaSource
 import me.him188.ani.datasources.api.source.MatchKind
 import me.him188.ani.datasources.api.source.MediaFetchRequest
@@ -42,6 +43,7 @@ import me.him188.ani.datasources.api.source.MediaMatch
 import me.him188.ani.datasources.api.source.MediaSource
 import me.him188.ani.datasources.api.source.MediaSourceConfig
 import me.him188.ani.datasources.api.source.MediaSourceFactory
+import me.him188.ani.datasources.api.source.MediaSourceInfo
 import me.him188.ani.datasources.api.source.MediaSourceKind
 import me.him188.ani.datasources.api.source.asAutoCloseable
 import me.him188.ani.datasources.api.source.toOnlineMedia
@@ -66,11 +68,13 @@ import me.him188.ani.utils.xml.Xml
 class MikanCNMediaSource(
     config: MediaSourceConfig,
     indexCacheProvider: MikanIndexCacheProvider = MemoryMikanIndexCacheProvider(),
-) : AbstractMikanMediaSource(ID, config, "https://mikanime.tv", indexCacheProvider) {
+) : AbstractMikanMediaSource(ID, config, BASE_URL, indexCacheProvider) {
     class Factory : MediaSourceFactory {
-        override val mediaSourceId: String get() = ID
+        override val factoryId: FactoryId get() = FactoryId(ID)
 
-        override fun create(config: MediaSourceConfig): MediaSource =
+        override val info: MediaSourceInfo get() = INFO
+
+        override fun create(mediaSourceId: String, config: MediaSourceConfig): MediaSource =
             MikanCNMediaSource(config)
 
         fun create(
@@ -81,16 +85,27 @@ class MikanCNMediaSource(
 
     companion object {
         const val ID = "mikan-mikanime-tv"
+        const val BASE_URL = "https://mikanime.tv"
+        val INFO = MediaSourceInfo(
+            displayName = "蜜柑计划 (CN)",
+            websiteUrl = BASE_URL,
+            iconUrl = "https://mikanani.me/images/mikan-pic.png",
+            iconResourceId = "mikan.png",
+        )
     }
+
+    override val info: MediaSourceInfo get() = INFO
 }
 
 class MikanMediaSource(
     config: MediaSourceConfig,
     indexCacheProvider: MikanIndexCacheProvider = MemoryMikanIndexCacheProvider(),
-) : AbstractMikanMediaSource(ID, config, "https://mikanani.me", indexCacheProvider) {
+) : AbstractMikanMediaSource(ID, config, BASE_URL, indexCacheProvider) {
     class Factory : MediaSourceFactory {
-        override val mediaSourceId: String get() = ID
-        override fun create(config: MediaSourceConfig): MediaSource = MikanMediaSource(config)
+        override val factoryId: FactoryId get() = FactoryId(ID)
+
+        override val info: MediaSourceInfo get() = INFO
+        override fun create(mediaSourceId: String, config: MediaSourceConfig): MediaSource = MikanMediaSource(config)
 
         // TODO: this is actually not so good. We should generalize how MS can access caches.
         fun create(
@@ -101,7 +116,16 @@ class MikanMediaSource(
 
     companion object {
         const val ID = "mikan"
+        const val BASE_URL = "https://mikanani.me"
+        val INFO = MediaSourceInfo(
+            displayName = "蜜柑计划",
+            websiteUrl = BASE_URL,
+            iconUrl = "https://mikanani.me/images/mikan-pic.png",
+            iconResourceId = "mikan.png",
+        )
     }
+
+    override val info: MediaSourceInfo get() = INFO
 }
 
 abstract class AbstractMikanMediaSource(
@@ -163,7 +187,7 @@ abstract class AbstractMikanMediaSource(
         // "无职转生Ⅱ ～到了异世界就拿出真本事～" 19 chars, 可以搜索, 再长的就会直接没有结果
 
 
-        val bangumiSubjectId = request.subjectId ?: return null
+        val bangumiSubjectId = request.subjectId
 
         val subjectId =
             indexCacheProvider.getMikanSubjectId(bangumiSubjectId)

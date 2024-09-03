@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachIndexed
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -54,18 +55,19 @@ import me.him188.ani.app.data.models.preference.MediaSelectorSettings
 import me.him188.ani.app.data.source.media.cache.EpisodeCacheStatus
 import me.him188.ani.app.platform.LocalContext
 import me.him188.ani.app.platform.PermissionManager
+import me.him188.ani.app.tools.getOrZero
 import me.him188.ani.app.ui.foundation.theme.stronglyWeaken
 import me.him188.ani.app.ui.foundation.widgets.ProgressIndicatorHeight
 import me.him188.ani.app.ui.settings.framework.components.SettingsScope
 import me.him188.ani.app.ui.settings.framework.components.TextItem
 import me.him188.ani.app.ui.subject.episode.mediaFetch.MediaSelectorView
+import me.him188.ani.app.ui.subject.episode.mediaFetch.MediaSourceInfoProvider
 import me.him188.ani.app.ui.subject.episode.mediaFetch.MediaSourceResultsView
 import me.him188.ani.app.ui.subject.episode.mediaFetch.rememberMediaSelectorPresentation
 import me.him188.ani.app.ui.subject.episode.mediaFetch.rememberMediaSourceResultsPresentation
 import me.him188.ani.datasources.api.EpisodeSort
 import me.him188.ani.datasources.api.topic.UnifiedCollectionType
 import me.him188.ani.datasources.api.topic.isDoneOrDropped
-import moe.tlaster.precompose.flow.collectAsStateWithLifecycle
 import org.koin.mp.KoinPlatform
 
 
@@ -102,6 +104,7 @@ data class EpisodeCacheInfo(
 @Composable
 fun SettingsScope.EpisodeCacheListGroup(
     state: EpisodeCacheListState,
+    mediaSourceInfoProvider: MediaSourceInfoProvider,
     mediaSelectorSettingsProvider: () -> Flow<MediaSelectorSettings>,
     modifier: Modifier = Modifier,
 ) {
@@ -141,17 +144,18 @@ fun SettingsScope.EpisodeCacheListGroup(
                 sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                 modifier = Modifier,
             ) {
-                val selectorPresentation = rememberMediaSelectorPresentation { task.mediaSelector }
+                val selectorPresentation =
+                    rememberMediaSelectorPresentation(mediaSourceInfoProvider) { task.mediaSelector }
                 MediaSelectorView(
                     selectorPresentation,
                     sourceResults = { MediaSourceResultsView(sourceResults, selectorPresentation) },
-                    onClickItem = {
-                        state.selectMedia(it)
-                    },
                     modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp)
                         .navigationBarsPadding()
                         .fillMaxHeight() // 防止添加筛选后数量变少导致 bottom sheet 高度变化
                         .fillMaxWidth(),
+                    onClickItem = {
+                        state.selectMedia(it)
+                    },
                     bottomActions = {
                         TextButton({ state.cancelRequest() }) {
                             Text("取消")
@@ -375,12 +379,12 @@ fun EpisodeCacheActionIcon(
 
         is EpisodeCacheStatus.Caching -> {
             IconButton(onClick) {
-                val progressIsNull by remember(cacheStatus) {
+                val progressIsUnspecified by remember(cacheStatus) {
                     derivedStateOf {
-                        cacheStatus.progress == null
+                        cacheStatus.progress.isUnspecified
                     }
                 }
-                if (progressIsNull) {
+                if (progressIsUnspecified) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(progressIndicatorSize),
                         strokeWidth = strokeWidth,
@@ -388,7 +392,7 @@ fun EpisodeCacheActionIcon(
                     )
                 } else {
                     CircularProgressIndicator(
-                        progress = { cacheStatus.progress ?: 0f },
+                        progress = { cacheStatus.progress.getOrZero() },
                         modifier = Modifier.size(progressIndicatorSize),
                         strokeWidth = strokeWidth,
                         trackColor = trackColor,

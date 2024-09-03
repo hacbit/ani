@@ -1,10 +1,12 @@
 package me.him188.ani.app.ui.cache.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -13,20 +15,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Downloading
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Restore
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -36,6 +43,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +52,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import me.him188.ani.app.tools.MonoTasker
+import me.him188.ani.app.tools.Progress
+import me.him188.ani.app.tools.getOrZero
+import me.him188.ani.app.tools.toPercentageOrZero
 import me.him188.ani.app.ui.foundation.AsyncImage
 import me.him188.ani.app.ui.foundation.interaction.clickableAndMouseRightClick
 import me.him188.ani.app.ui.foundation.text.ProvideContentColor
@@ -59,6 +70,7 @@ class CacheEpisodeState(
     val cacheId: String,
     val sort: EpisodeSort,
     val displayName: String,
+    val creationTime: Long?,
     screenShots: State<List<String>>, // url
     stats: State<Stats>,
     state: State<CacheEpisodePaused>,
@@ -71,18 +83,22 @@ class CacheEpisodeState(
     @Immutable
     data class Stats(
         val downloadSpeed: FileSize,
-        val progress: Float?,
+        val progress: Progress,
         val totalSize: FileSize,
-    )
+    ) {
+        companion object {
+            val Unspecified = Stats(FileSize.Unspecified, Progress.Unspecified, FileSize.Unspecified)
+        }
+    }
 
     val hasValidSubjectAndEpisodeId get() = subjectId != 0 && episodeId != 0
 
-    val progress by derivedStateOf { stats.value.progress ?: 0f }
+    val progress by derivedStateOf { stats.value.progress }
 
     val screenShots by screenShots
 
     val isPaused by derivedStateOf { state.value == CacheEpisodePaused.PAUSED }
-    val isFinished by derivedStateOf { this.progress >= 1f }
+    val isFinished by derivedStateOf { stats.value.progress.isFinished }
 
     val totalSize: FileSize by derivedStateOf { stats.value.totalSize }
 
@@ -101,19 +117,18 @@ class CacheEpisodeState(
 
     val progressText by derivedStateOf {
         val value = stats.value.progress
-        if (value == null || this.isFinished) {
+        if (value.isUnspecified || this.isFinished) {
             null
         } else {
-            "${String.format1f(value * 100)}%"
+            "${String.format1f(value.toPercentageOrZero())}%"
         }
     }
 
     val speedText by derivedStateOf {
         val progressValue = stats.value.progress
         val speed = stats.value.downloadSpeed
-        if (progressValue != null) {
-            val isFinished = progressValue >= 1f
-            val showSpeed = !isFinished && speed != FileSize.Unspecified
+        if (!progressValue.isUnspecified) {
+            val showSpeed = !progressValue.isFinished && speed != FileSize.Unspecified
             if (showSpeed) {
                 return@derivedStateOf "${speed}/s"
             }
@@ -121,7 +136,7 @@ class CacheEpisodeState(
         null
     }
 
-    val isProgressUnspecified by derivedStateOf { stats.value.progress == null }
+    val isProgressUnspecified by derivedStateOf { stats.value.progress.isUnspecified }
 
     private val actionTasker = MonoTasker(backgroundScope)
 
@@ -193,13 +208,13 @@ fun CacheEpisodeItem(
         headlineContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "${state.sort}  ",
+                    "${state.sort}",
                     softWrap = false,
                 )
 
                 Text(
                     state.displayName,
-                    Modifier.basicMarquee(),
+                    Modifier.padding(start = 8.dp).basicMarquee(),
                 )
             }
         },
@@ -220,9 +235,20 @@ fun CacheEpisodeItem(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Bottom),
                     ) {
-                        Box(Modifier.padding(end = 16.dp)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Crossfade(state.isFinished, Modifier.size(20.dp)) {
+                                if (it) {
+                                    Icon(Icons.Rounded.DownloadDone, "下载完成")
+                                } else {
+                                    Icon(Icons.Rounded.Downloading, "下载中")
+                                }
+                            }
+
                             state.sizeText?.let {
-                                Text(it, softWrap = false)
+                                Text(it, Modifier.padding(end = 16.dp), softWrap = false)
                             }
                         }
 
@@ -257,7 +283,7 @@ fun CacheEpisodeItem(
                                 strokeCap = StrokeCap.Round,
                             )
                         } else {
-                            val progress by animateFloatAsState(state.progress)
+                            val progress by animateFloatAsState(state.progress.getOrZero())
                             LinearProgressIndicator(
                                 { progress },
                                 Modifier.fillMaxWidth(),
@@ -270,34 +296,44 @@ fun CacheEpisodeItem(
             }
         },
         trailingContent = {
-            Box {
-                if (state.isActionInProgress) {
-                    IconButton(
-                        onClick = {
-                            // no-op
-                        },
-                    ) {
-                        CircularProgressIndicator(Modifier.size(24.dp))
+            BoxWithConstraints {
+                // 仅当有足够宽度时, 才展示当前状态下的推荐操作
+                val showPrimaryAction by remember {
+                    derivedStateOf { maxWidth >= 320.dp }
+                }
+                Row(horizontalArrangement = Arrangement.aligned(Alignment.End)) {
+                    // 当前状态下的推荐操作
+                    AnimatedVisibility(showPrimaryAction) {
+                        if (state.isActionInProgress) {
+                            IconButton(
+                                onClick = {
+                                    // no-op
+                                },
+                                enabled = false,
+                                colors = IconButtonDefaults.iconButtonColors().run {
+                                    copy(disabledContainerColor = containerColor, disabledContentColor = contentColor)
+                                },
+                            ) {
+                                CircularProgressIndicator(Modifier.size(24.dp))
+                            }
+                        } else {
+                            if (!state.isFinished) {
+                                if (state.isPaused) {
+                                    IconButton({ state.resume() }) {
+                                        Icon(Icons.Rounded.Restore, "继续下载")
+                                    }
+                                } else {
+                                    IconButton({ state.pause() }) {
+                                        Icon(Icons.Rounded.Pause, "暂停下载", Modifier.size(28.dp))
+                                    }
+                                }
+                            }
+                        }
                     }
-                } else {
-                    when {
-                        state.isFinished -> {
-                            IconButton({ showDropdown = true }) {
-                                Icon(Icons.Rounded.Check, "下载完成")
-                            }
-                        }
 
-                        state.isPaused -> {
-                            IconButton({ state.resume() }) {
-                                Icon(Icons.Rounded.Restore, "继续下载")
-                            }
-                        }
-
-                        !state.isPaused -> {
-                            IconButton({ state.pause() }) {
-                                Icon(Icons.Rounded.Pause, "暂停下载", Modifier.size(28.dp))
-                            }
-                        }
+                    // 总是展示的更多操作. 实际上点击整个 ListItem 都能展示 dropdown, 但留有这个按钮避免用户无法发现点击 list 能展开.
+                    IconButton({ showDropdown = true }) {
+                        Icon(Icons.Rounded.MoreVert, "管理此项")
                     }
                 }
                 Dropdown(
@@ -316,6 +352,30 @@ private fun Dropdown(
     state: CacheEpisodeState,
     modifier: Modifier = Modifier,
 ) {
+    var showConfirm by rememberSaveable { mutableStateOf(false) }
+    if (showConfirm) {
+        AlertDialog(
+            { showConfirm = false },
+            icon = { Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("删除缓存") },
+            text = { Text("删除后不可恢复，确认删除吗?") },
+            confirmButton = {
+                TextButton(
+                    {
+                        state.delete()
+                        showConfirm = false
+                    },
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton({ showConfirm = false }) {
+                    Text("取消")
+                }
+            },
+        )
+    }
     DropdownMenu(showDropdown, onDismissRequest, modifier) {
         if (!state.isFinished) {
             if (state.isPaused) {
@@ -359,7 +419,7 @@ private fun Dropdown(
                 text = { Text("删除", color = MaterialTheme.colorScheme.error) },
                 leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.error) },
                 onClick = {
-                    state.delete()
+                    showConfirm = true
                     onDismissRequest()
                 },
             )

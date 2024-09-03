@@ -28,9 +28,11 @@ import me.him188.ani.datasources.api.paging.Paged
 import me.him188.ani.datasources.api.paging.PagedSource
 import me.him188.ani.datasources.api.source.ConnectionStatus
 import me.him188.ani.datasources.api.source.DownloadSearchQuery
+import me.him188.ani.datasources.api.source.FactoryId
 import me.him188.ani.datasources.api.source.MediaSource
 import me.him188.ani.datasources.api.source.MediaSourceConfig
 import me.him188.ani.datasources.api.source.MediaSourceFactory
+import me.him188.ani.datasources.api.source.MediaSourceInfo
 import me.him188.ani.datasources.api.source.TopicMediaSource
 import me.him188.ani.datasources.api.source.useHttpClient
 import me.him188.ani.datasources.api.topic.FileSize.Companion.bytes
@@ -52,12 +54,19 @@ class AcgRipMediaSource(
     config: MediaSourceConfig,
 ) : TopicMediaSource() {
     class Factory : MediaSourceFactory {
-        override val mediaSourceId: String get() = ID
-        override fun create(config: MediaSourceConfig): MediaSource = AcgRipMediaSource(config)
+        override val factoryId: FactoryId get() = FactoryId(ID)
+        override val info: MediaSourceInfo get() = INFO
+        override fun create(mediaSourceId: String, config: MediaSourceConfig): MediaSource = AcgRipMediaSource(config)
     }
 
     companion object {
         const val ID = "acg.rip"
+        val INFO = MediaSourceInfo(
+            "ACG.RIP",
+            websiteUrl = "https://acg.rip",
+            iconUrl = "https://acg.rip/favicon.ico",
+            iconResourceId = "acg-rip.png",
+        )
     }
 
     override val mediaSourceId: String get() = ID
@@ -107,6 +116,7 @@ class AcgRipMediaSource(
         }
     }
 
+    override val info: MediaSourceInfo get() = INFO
 }
 
 private val FORMATTER = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss Z", Locale.ENGLISH)

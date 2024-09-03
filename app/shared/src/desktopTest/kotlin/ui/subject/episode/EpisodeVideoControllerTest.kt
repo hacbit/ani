@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -29,6 +30,7 @@ import me.him188.ani.app.ui.foundation.theme.aniDarkColorTheme
 import me.him188.ani.app.ui.framework.AniComposeUiTest
 import me.him188.ani.app.ui.framework.runAniComposeUiTest
 import me.him188.ani.app.ui.subject.episode.mediaFetch.rememberTestMediaSelectorPresentation
+import me.him188.ani.app.ui.subject.episode.mediaFetch.rememberTestMediaSourceInfoProvider
 import me.him188.ani.app.ui.subject.episode.mediaFetch.rememberTestMediaSourceResults
 import me.him188.ani.app.ui.subject.episode.statistics.VideoLoadingState
 import me.him188.ani.app.ui.subject.episode.video.sidesheet.rememberTestEpisodeSelectorState
@@ -43,7 +45,6 @@ import me.him188.ani.app.videoplayer.ui.progress.TAG_PROGRESS_SLIDER_PREVIEW_POP
 import me.him188.ani.app.videoplayer.ui.progress.TAG_SELECT_EPISODE_ICON_BUTTON
 import me.him188.ani.app.videoplayer.ui.state.DummyPlayerState
 import me.him188.ani.app.videoplayer.ui.top.PlayerTopBar
-import me.him188.ani.danmaku.ui.DanmakuConfig
 import me.him188.ani.danmaku.ui.DanmakuHostState
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -83,7 +84,6 @@ class EpisodeVideoControllerTest {
 
 
     private val controllerState = VideoControllerState(ControllerVisibility.Invisible)
-    private val playerState = DummyPlayerState()
     private var currentPositionMillis by mutableLongStateOf(0L)
     private val progressSliderState: MediaProgressSliderState = MediaProgressSliderState(
         { currentPositionMillis },
@@ -105,6 +105,10 @@ class EpisodeVideoControllerTest {
     @Composable
     private fun Player(gestureFamily: GestureFamily) {
         ProvideCompositionLocalsForPreview(colorScheme = aniDarkColorTheme()) {
+            val scope = rememberCoroutineScope()
+            val playerState = remember {
+                DummyPlayerState(scope.coroutineContext)
+            }
             EpisodeVideoImpl(
                 playerState = playerState,
                 expanded = true,
@@ -116,7 +120,6 @@ class EpisodeVideoControllerTest {
                 danmakuEnabled = false,
                 onToggleDanmaku = {},
                 videoLoadingState = { VideoLoadingState.Succeed(isBt = true) },
-                danmakuConfig = { DanmakuConfig.Default },
                 onClickFullScreen = {},
                 onExitFullscreen = {},
                 danmakuEditor = {},
@@ -130,12 +133,12 @@ class EpisodeVideoControllerTest {
                         enabled = false,
                     )
                 },
-                leftBottomTips = {},
                 progressSliderState = progressSliderState,
-                danmakuFrozen = true,
                 mediaSelectorPresentation = rememberTestMediaSelectorPresentation(),
                 mediaSourceResultsPresentation = rememberTestMediaSourceResults(),
                 episodeSelectorState = rememberTestEpisodeSelectorState(),
+                mediaSourceInfoProvider = rememberTestMediaSourceInfoProvider(),
+                leftBottomTips = {},
                 gestureFamily = gestureFamily,
             )
         }
@@ -179,13 +182,14 @@ class EpisodeVideoControllerTest {
             assertEquals(NORMAL_INVISIBLE, controllerState.visibility)
         }
 
-        onRoot().performClick()
+        val root = onAllNodes(isRoot()).onFirst()
+        root.performClick()
         runOnIdle {
             waitUntil { topBar.exists() }
             assertEquals(NORMAL_VISIBLE, controllerState.visibility)
         }
 
-        onRoot().performClick()
+        root.performClick()
         runOnIdle {
             waitUntil { topBar.doesNotExist() }
             assertEquals(NORMAL_INVISIBLE, controllerState.visibility)
@@ -507,10 +511,11 @@ class EpisodeVideoControllerTest {
      */
     @Test
     fun `mouse - hover to always on - bottom bar`() = runAniComposeUiTest {
+        val root = onAllNodes(isRoot()).onFirst()
         testRequestAlwaysOn(
             performGesture = {
                 // 鼠标移动到控制器上
-                onRoot().performMouseInput {
+                root.performMouseInput {
                     moveTo(bottomCenter) // 肯定在 bottomBar 区域内
                 }
             },
@@ -523,10 +528,11 @@ class EpisodeVideoControllerTest {
      */
     @Test
     fun `mouse - hover to always on - top bar`() = runAniComposeUiTest {
+        val root = onAllNodes(isRoot()).onFirst()
         testRequestAlwaysOn(
             performGesture = {
                 // 鼠标移动到控制器上
-                onRoot().performMouseInput {
+                root.performMouseInput {
                     moveTo(topCenter) // 肯定在 topBar 区域内
                 }
             },
@@ -543,10 +549,11 @@ class EpisodeVideoControllerTest {
         waitForSideSheetOpen: () -> Unit,
         waitForSideSheetClose: () -> Unit,
     ) {
+        val root = onAllNodes(isRoot()).onFirst()
         testRequestAlwaysOn(
             performGesture = {
                 openSideSheet()
-                onRoot().performMouseInput {
+                root.performMouseInput {
                     moveTo(centerRight)
                 }
                 waitForSideSheetOpen()
@@ -561,7 +568,7 @@ class EpisodeVideoControllerTest {
             mainClock.autoAdvance = false
         }
         runOnIdle {
-            onRoot().performTouchInput {
+            root.performTouchInput {
                 click(center)
             }
         }
@@ -616,10 +623,11 @@ class EpisodeVideoControllerTest {
      */
     @Test
     fun `mouse - clicking does not request always on - bottom bar`() = runAniComposeUiTest {
+        val root = onAllNodes(isRoot()).onFirst()
         testRequestAlwaysOn(
             performGesture = {
                 // 手指单击控制器
-                onRoot().performTouchInput {
+                root.performTouchInput {
                     click(bottomCenter) // 肯定在 bottomBar 区域内
                 }
             },
@@ -632,10 +640,11 @@ class EpisodeVideoControllerTest {
      */
     @Test
     fun `mouse - clicking does not request always on - top bar`() = runAniComposeUiTest {
+        val root = onAllNodes(isRoot()).onFirst()
         testRequestAlwaysOn(
             performGesture = {
                 // 手指单击控制器
-                onRoot().performTouchInput {
+                root.performTouchInput {
                     click(topCenter) // 肯定在 topBar 区域内
                 }
             },
@@ -663,10 +672,11 @@ class EpisodeVideoControllerTest {
             )
         }
 
+        val root = onAllNodes(isRoot()).onFirst()
         // 显示控制器
         runOnUiThread {
             mainClock.autoAdvance = false
-            onRoot().performTouchInput {
+            root.performTouchInput {
                 swipe(centerLeft, center)
             }
         }

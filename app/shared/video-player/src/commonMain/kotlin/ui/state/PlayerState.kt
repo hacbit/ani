@@ -85,7 +85,12 @@ interface PlayerState {
      * @throws VideoSourceOpenException 当打开失败时抛出, 包含原因
      */
     @Throws(VideoSourceOpenException::class, CancellationException::class)
-    suspend fun setVideoSource(source: VideoSource<*>?)
+    suspend fun setVideoSource(source: VideoSource<*>)
+
+    /**
+     * 停止播放并清除上次[设置][setVideoSource]的视频源. 之后还可以通过 [setVideoSource] 恢复播放.
+     */
+    suspend fun clearVideoSource()
 
     /**
      * Properties of the video being played.
@@ -236,12 +241,16 @@ abstract class AbstractPlayerState<D : AbstractPlayerState.Data>(
         }
     }.stateIn(backgroundScope, SharingStarted.WhileSubscribed(), staticMediaCacheProgressState(ChunkState.NONE))
 
+    protected open suspend fun cacheProgressLoop() {
+        while (true) {
+            cacheProgressFlow.value.update()
+            delay(1000)
+        }
+    }
+
     init {
         backgroundScope.launch {
-            while (true) {
-                cacheProgressFlow.value.update()
-                delay(1000)
-            }
+            cacheProgressLoop()
         }
     }
 
@@ -257,15 +266,7 @@ abstract class AbstractPlayerState<D : AbstractPlayerState.Data>(
         }
     }
 
-    final override suspend fun setVideoSource(source: VideoSource<*>?) {
-        if (source == null) {
-            logger.info { "setVideoSource: Cleaning up player since source is null" }
-            cleanupPlayer()
-            this.videoSource.value = null
-            this.openResource.value = null
-            return
-        }
-
+    final override suspend fun setVideoSource(source: VideoSource<*>) {
         val previousResource = openResource.value
         if (source == previousResource?.videoSource) {
             return
@@ -297,6 +298,13 @@ abstract class AbstractPlayerState<D : AbstractPlayerState.Data>(
         }
 
         this.openResource.value = opened
+    }
+
+    final override suspend fun clearVideoSource() {
+        logger.info { "clearVideoSource: Cleaning up player" }
+        cleanupPlayer()
+        this.videoSource.value = null
+        this.openResource.value = null
     }
 
     fun closeVideoSource() {
@@ -382,10 +390,30 @@ fun interface PlayerStateFactory {
     fun create(context: Context, parentCoroutineContext: CoroutineContext): PlayerState
 }
 
+interface SupportsAudio {
+
+    val volume: StateFlow<Float>
+    val isMute: StateFlow<Boolean>
+    val maxValue: Float
+
+    fun toggleMute(mute: Boolean? = null)
+
+    @UiThread
+    fun setVolume(volume: Float)
+
+    @UiThread
+    fun volumeUp(value: Float = 0.05f)
+
+    @UiThread
+    fun volumeDown(value: Float = 0.05f)
+}
+
 /**
  * For previewing
  */
-class DummyPlayerState : AbstractPlayerState<AbstractPlayerState.Data>(EmptyCoroutineContext) {
+class DummyPlayerState(
+    parentCoroutineContext: CoroutineContext = EmptyCoroutineContext,
+) : AbstractPlayerState<AbstractPlayerState.Data>(parentCoroutineContext), SupportsAudio {
     override val state: MutableStateFlow<PlaybackState> = MutableStateFlow(PlaybackState.PLAYING)
     override fun stopImpl() {
 
@@ -413,6 +441,11 @@ class DummyPlayerState : AbstractPlayerState<AbstractPlayerState.Data>(EmptyCoro
 
     override suspend fun startPlayer(data: Data) {
         // no-op
+    }
+
+    override suspend fun cacheProgressLoop() {
+        // no-op
+        // 测试的时候 delay 会被直接跳过, 导致死循环
     }
 
     override val videoSource: MutableStateFlow<VideoSource<*>?> = MutableStateFlow(null)
@@ -458,6 +491,26 @@ class DummyPlayerState : AbstractPlayerState<AbstractPlayerState.Data>(EmptyCoro
 
     override val subtitleTracks: TrackGroup<SubtitleTrack> = emptyTrackGroup()
     override val audioTracks: TrackGroup<AudioTrack> = emptyTrackGroup()
+
+    override val volume: MutableStateFlow<Float> = MutableStateFlow(0f)
+    override val isMute: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    override val maxValue: Float = 1f
+
+    override fun toggleMute(mute: Boolean?) {
+        isMute.value = mute ?: !isMute.value
+    }
+
+    override fun setVolume(volume: Float) {
+        this.volume.value = volume
+    }
+
+    override fun volumeUp(value: Float) {
+        setVolume(volume.value + value)
+    }
+
+    override fun volumeDown(value: Float) {
+        setVolume(volume.value - value)
+    }
 
     override fun saveScreenshotFile(filename: String) {
     }
